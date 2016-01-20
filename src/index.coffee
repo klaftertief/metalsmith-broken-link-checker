@@ -1,6 +1,7 @@
 URI = require 'urijs'
 cheerio = require 'cheerio'
 path = require 'path'
+srcset = require 'srcset'
 
 
 isHTML = (filename) ->
@@ -31,6 +32,7 @@ class Link
     else if $link.is('img')
       @text = $link.attr('alt')
       @href = $link.attr('src')
+      @srcset = $link.attr('srcset')
 
   isBroken: (filename, files, options) ->
     # Allow anchors before checking for a missing href
@@ -41,18 +43,32 @@ class Link
     if not @href?
       return true
 
-    uri = URI(@href)
+    # List of links to check
+    hrefs = [@href]
+
+    # Add srcset hrefs when applicable
+    if @srcset?
+      srcsets = srcset.parse(@srcset)
+      hrefs = hrefs.concat (srcsets.map (item) -> item.url)
+
+    results = (@hasBrokenHref filename, files, options, href for href in hrefs)
+    result = results.some ((result) -> result)
+
+    return result
+
+  hasBrokenHref : (filename, files, options, href) ->
+    uri = URI(href)
 
     # Allow anything matching the options.allowRegex regex
-    if options.allowRegex? and options.allowRegex.exec(@href)
+    if options.allowRegex? and options.allowRegex.exec(href)
       return false
 
     # Empty link is always broken
-    if @href is ''
+    if href is ''
       return true
 
     # Allow link to '#'
-    if @href is '#'
+    if href is '#'
       return false
 
     # Automatically accept all external links (could change later)
